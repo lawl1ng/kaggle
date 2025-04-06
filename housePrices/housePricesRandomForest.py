@@ -12,7 +12,8 @@ test_data = pd.read_csv(test_data_file_path)
 
 # Choose target and features
 y = train_data.SalePrice
-features = ['LotArea', 'YearBuilt', '1stFlrSF', '2ndFlrSF', 'FullBath', 'BedroomAbvGr', 'TotRmsAbvGrd']
+# features = ['LotArea', 'YearBuilt', '1stFlrSF', '2ndFlrSF', 'FullBath', 'BedroomAbvGr', 'TotRmsAbvGrd'] # ~22000
+features = ['MSSubClass', 'LotArea', 'OverallQual', 'OverallCond', 'YearBuilt', 'YearRemodAdd', '1stFlrSF', '2ndFlrSF', 'LowQualFinSF', 'GrLivArea', 'FullBath', 'HalfBath', 'BedroomAbvGr', 'KitchenAbvGr', 'TotRmsAbvGrd', 'Fireplaces', 'WoodDeckSF', 'OpenPorchSF', 'EnclosedPorch', '3SsnPorch', 'ScreenPorch', 'PoolArea', 'MiscVal', 'MoSold', 'YrSold'] # ~18000
 
 # Select columns corresponding to features, and preview the data
 X = train_data[features]
@@ -43,6 +44,5 @@ test_X = test_data[features]
 test_preds = rf_model_on_full_data.predict(test_X)
 
 # Run the code to save predictions in the format used for competition scoring
-output = pd.DataFrame({'Id': test_data.Id,
-                       'SalePrice': test_preds})
-output.to_csv('./housePrices/submissions/submissionRandomForest01.csv', index=False)
+output = pd.DataFrame({'Id': test_data.Id, 'SalePrice': test_preds})
+output.to_csv('./housePrices/submissions/submissionRandomForest02.csv', index=False)
