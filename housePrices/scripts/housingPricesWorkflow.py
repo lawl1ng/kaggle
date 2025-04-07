@@ -226,6 +226,7 @@ expose_map = {'Gd': 4, 'Av': 3, 'Mn': 2, 'No': 1, 'NA': 0}
 fence_map = {'GdPrv': 4,'MnPrv': 3,'GdWo': 2, 'MnWw': 1,'NA': 0}
 
 ord_col = ['ExterQual','ExterCond','BsmtQual', 'BsmtCond','HeatingQC','KitchenQual','GarageQual','GarageCond', 'FireplaceQu']
+
 for col in ord_col:
     X[col] = X[col].map(ordinal_map)
 
@@ -244,7 +245,6 @@ X['Fence'] = X['Fence'].map(fence_map)
 #TotalBath = FullBath + HalfBath
 #TotalPorch = OpenPorchSF + EnclosedPorch + ScreenPorch
 #TotalBsmtFin = BsmtFinSF1 + BsmtFinSF2
-
 X['TotalLot'] = X['LotFrontage'] + X['LotArea']
 X['TotalBsmtFin'] = X['BsmtFinSF1'] + X['BsmtFinSF2']
 X['TotalSF'] = X['TotalBsmtSF'] + X['2ndFlrSF']
@@ -276,3 +276,38 @@ plt.show()
 y["SalePrice"] = np.log(y['SalePrice'])
 
 # Satisfied with final data, proceed to modelling.
+# This consists of scaling the data for better optimisation
+# and different ensembling methods for predicting
+# there's also some hyperparameter tuning - but that's covered in a separate notebook (by AQX)
+
+x = X.loc[train.index]
+y = y.loc[train.index]
+#test = X.loc[test.index]
+
+# RobustScaler removes median and scales data according to IQR. Good for data with a lot of outliers
+# Doing this on both train and test data opens the set up to data leakage
+
+from sklearn.preprocessing import RobustScaler
+
+cols = x.select_dtypes(np.number).columns
+transformer = RobustScaler().fit(x[cols])
+x[cols] = transformer.transform(x[cols])
+#test[cols] = transformer.transform(test[cols])
+
+# Ensemble algorithms
+from sklearn.model_selection import train_test_split
+
+X_train, X_val, y_train, y_val = train_test_split(x, y, test_size=0.2, random_state=2020)
+
+# Focus on boosting (from bagging, boosting and stacking)
+# Boosting works on a class of weak learners, improving them into strong learners.
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from xgboost import XGBRegressor
+from sklearn import ensemble
+from lightgbm import LGBMRegressor
+from sklearn.model_selection import cross_val_score
+from catboost import CatBoostRegressor
+
+# xgboost is extreme gradient boost - uses the gradient boosting framework. Gradient descent algo is employed to minimise errors in the sequential model. It improves on the gradient boosting framework with faster execution speed and improved faster performance.
+
+xgb = XGBRegressor(booster='gbtree', objective='reg:squarederror')
