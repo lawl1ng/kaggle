@@ -18,8 +18,8 @@ train.head()
 
 # Some columns have a lot of NAN (Not a Number). We'll investigate this later
 # Concatenate the train and test data. Makes it more convenient for preprocessing the data later
-# X = pd.concat([train.drop('SalePrice', axis=1), test], axis=0)
-X = train.drop('SalePrice', axis=1)
+X = pd.concat([train.drop('SalePrice', axis=1), test], axis=0)
+#X = train.drop('SalePrice', axis=1)
 y = train[['SalePrice']]
 
 X.info()
@@ -282,7 +282,7 @@ y["SalePrice"] = np.log(y['SalePrice'])
 
 x = X.loc[train.index]
 y = y.loc[train.index]
-#test = X.loc[test.index]
+test = X.loc[test.index]
 
 # RobustScaler removes median and scales data according to IQR. Good for data with a lot of outliers
 # Doing this on both train and test data opens the set up to data leakage
@@ -297,17 +297,185 @@ x[cols] = transformer.transform(x[cols])
 # Ensemble algorithms
 from sklearn.model_selection import train_test_split
 
-X_train, X_val, y_train, y_val = train_test_split(x, y, test_size=0.2, random_state=2020)
+train_X, val_X, train_y, val_y = train_test_split(x, y, random_state=0)
 
-# Focus on boosting (from bagging, boosting and stacking)
-# Boosting works on a class of weak learners, improving them into strong learners.
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-from xgboost import XGBRegressor
-from sklearn import ensemble
-from lightgbm import LGBMRegressor
-from sklearn.model_selection import cross_val_score
-from catboost import CatBoostRegressor
+# Using decision tree regressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics import mean_absolute_error
 
-# xgboost is extreme gradient boost - uses the gradient boosting framework. Gradient descent algo is employed to minimise errors in the sequential model. It improves on the gradient boosting framework with faster execution speed and improved faster performance.
+dtr_model = DecisionTreeRegressor()
+dtr_model.fit(train_X, train_y)
+val_predictions = dtr_model.predict(val_X)
+print(mean_absolute_error(val_y, val_predictions))
 
-xgb = XGBRegressor(booster='gbtree', objective='reg:squarederror')
+def get_mae(max_leaf_nodes, train_X, val_X, train_y, val_y):
+    model = DecisionTreeRegressor(max_leaf_nodes=max_leaf_nodes, random_state=0)
+    model.fit(train_X, train_y)
+    preds_val = model.predict(val_X)
+    mae = mean_absolute_error(val_y, preds_val)
+    return(mae)
+
+# compare MAE with differing values of max_leaf_nodes
+for max_leaf_nodes in [200, 250, 300, 350]:
+    my_mae = get_mae(max_leaf_nodes, train_X, val_X, train_y, val_y)
+    print("Max leaf nodes: %d  \t\t Mean Absolute Error:  %d" %(max_leaf_nodes, my_mae))
+
+final_dtr_model = DecisionTreeRegressor(max_leaf_nodes=300, random_state=1)
+final_dtr_model.fit(x, y)
+predictions = final_dtr_model.predict(test)
+output = pd.DataFrame({'Id': test.index, 'SalePrice': predictions})
+output.to_csv('./housePrices/submissions/submissionDTR1.csv', index=False)
+# Output does not look right. Submit and see how accurate it is. Not accurate at all.
+# At least learned high compute power needed and how to do a lot of EDA.
+
+# Commenting out all of the following because it's too computer intensive for the hardware I currently have.
+# Catboost, XGBoost and LGBM all require an i7 CPU, currently I've i5
+# # Focus on boosting (from bagging, boosting and stacking)
+# # Boosting works on a class of weak learners, improving them into strong learners.
+# from sklearn.metrics import mean_squared_error, mean_absolute_error
+# from xgboost import XGBRegressor
+# from sklearn import ensemble
+# from lightgbm import LGBMRegressor
+# from sklearn.model_selection import cross_val_score
+# from catboost import CatBoostRegressor
+
+# # xgboost is extreme gradient boost - uses the gradient boosting framework. Gradient descent algo is employed to minimise errors in the sequential model. It improves on the gradient boosting framework with faster execution speed and improved faster performance.
+# # Tried XGB but it took an enormous amount of CPU, at least more than I had...
+# xgb = XGBRegressor(booster='gbtree', objective='reg:squarederror')
+
+# # XGBoost HyperParameter Tuning
+# from sklearn.model_selection import RandomizedSearchCV
+
+# param_lst = {
+#     'learning_rate' : [0.01, 0.1, 0.15, 0.3, 0.5],
+#     'n_estimators' : [100, 500, 1000, 2000, 3000],
+#     'max_depth' : [3, 6, 9],
+#     'min_child_weight' : [1, 5, 10, 20],
+#     'reg_alpha' : [0.001, 0.01, 0.1],
+#     'reg_lambda' : [0.001, 0.01, 0.1]
+# }
+
+# xgb_reg = RandomizedSearchCV(estimator = xgb, param_distributions = param_lst,
+#                               n_iter = 100, scoring = 'neg_root_mean_squared_error',
+#                               cv = 5)
+
+# xgb_search = xgb_reg.fit(X_train, y_train)
+# # Haven't ran this as it was taking a very long time...
+
+# # XGB with tune hyperparameters
+# best_param = xgb_search.best_params_
+# xgb = XGBRegressor(**best_param)
+
+# # LightGBM is another gradient boosting framework developed by Microsoft based on decision tree algo. Faster training speed and higher efficiency. Lower mem usage, better accuracy, support of parallel learning, capable of handling large-scale data.
+# # Splits the tree leaf wise as opposed to level or depth wise... not sure what this means
+
+# lgbm = LGBMRegressor(boosting_type='gbdt',objective='regression', max_depth=-1,
+#                     lambda_l1=0.0001, lambda_l2=0, learning_rate=0.1,
+#                     n_estimators=100, max_bin=200, min_child_samples=20,
+#                     bagging_fraction=0.75, bagging_freq=5,
+#                     bagging_seed=7, feature_fraction=0.8,
+#                     feature_fraction_seed=7, verbose=-1)
+
+# # LBGM Hyperparameter tuning
+# # it looks like these are quite computer intensive...
+# # I've an i5 (10th generation) cpu, and while it can handle building ml models, an i7 would be better.
+# # CPU specs include 4 cores and 8 threads, 6MB Cache
+# # 64GB of RAM
+# # Apparently i5 is a starting point for ml when working with:
+# # small to medium sized datasets
+# # simpler algos like linear regression or decision trees
+# # data preprocessing and cleaning tasks
+# # basic programming objects
+# param_lst = {
+#     'max_depth' : [2, 5, 8, 10],
+#     'learning_rate' : [0.001, 0.01, 0.1, 0.2],
+#     'n_estimators' : [100, 300, 500, 1000, 1500],
+#     'lambda_l1' : [0.0001, 0.001, 0.01],
+#     'lambda_l2' : [0, 0.0001, 0.001, 0.01],
+#     'feature_fraction' : [0.4, 0.6, 0.8],
+#     'min_child_samples' : [5, 10, 20, 25]
+# }
+
+# lightgbm = RandomizedSearchCV(estimator = lgbm, param_distributions = param_lst,
+#                               n_iter = 100, scoring = 'neg_root_mean_squared_error',
+#                               cv = 5)
+
+# lightgbm_search = lightgbm.fit(X_train, y_train)
+# # Took a long time to run, but did run...
+
+# # LightBGM with tuned hyperparameters
+# best_param = lightgbm_search.best_params_
+# lgbm = LGBMRegressor(**best_param)
+
+# # catboost - another alternative gradient boosting framework developed by Yandex. Category boosting. Can deal with categorical features. Main point is it has features which fight the prediction shift caused by a certain target leakage present in all existing implementations of gradient boosting algos.
+
+# cb = CatBoostRegressor(loss_function='RMSE', logging_level='Silent')
+
+# param_lst = {
+#     'n_estimators' : [100, 300, 500, 1000, 1300, 1600],
+#     'learning_rate' : [0.0001, 0.001, 0.01, 0.1],
+#     'l2_leaf_reg' : [0.001, 0.01, 0.1],
+#     'random_strength' : [0.25, 0.5 ,1],
+#     'max_depth' : [3, 6, 9],
+#     'min_child_samples' : [2, 5, 10, 15, 20],
+#     'rsm' : [0.5, 0.7, 0.9],
+
+# }
+
+# catboost = RandomizedSearchCV(estimator = cb, param_distributions = param_lst, n_iter = 100, scoring = 'neg_root_mean_squared_error', cv = 5)
+
+# catboost_search = catboost.fit(X_train, y_train)
+# # Taking >1hr to run
+
+# # CatBoost with tuned hyperparams
+# best_param = catboost_search.best_params_
+# cb = CatBoostRegressor(logging_level='Silent', **best_param)
+
+# # Training and Evaluation
+# def mean_cross_val(model, X, y):
+#     score = cross_val_score(model, X, y, cv=5)
+#     mean = score.mean()
+#     return mean
+
+# cb.fit(X_train, y_train)
+# preds = cb.predict(X_val)
+# preds_test_cb = cb.predict(test)
+# mae_cb = mean_absolute_error(y_val, preds)
+# rmse_cb = np.sqrt(mean_squared_error(y_val, preds))
+# score_cb = cb.score(X_val, y_val)
+# cv_cb = mean_cross_val(cb, x, y)
+
+
+# xgb.fit(X_train, y_train)
+# preds = xgb.predict(X_val)
+# preds_test_xgb = xgb.predict(test)
+# mae_xgb = mean_absolute_error(y_val, preds)
+# rmse_xgb = np.sqrt(mean_squared_error(y_val, preds))
+# score_xgb = xgb.score(X_val, y_val)
+# cv_xgb = mean_cross_val(xgb, x, y)
+
+
+# lgbm.fit(X_train, y_train)
+# preds = lgbm.predict(X_val)
+# preds_test_lgbm = lgbm.predict(test)
+# mae_lgbm = mean_absolute_error(y_val, preds)
+# rmse_lgbm = np.sqrt(mean_squared_error(y_val, preds))
+# score_lgbm = lgbm.score(X_val, y_val)
+# cv_lgbm = mean_cross_val(lgbm, x, y)
+
+# # Model performances
+# model_performances = pd.DataFrame({
+#     "Model" : ["XGBoost", "LGBM", "CatBoost"],
+#     "CV(5)" : [str(cv_xgb)[0:5], str(cv_lgbm)[0:5], str(cv_cb)[0:5]],
+#     "MAE" : [str(mae_xgb)[0:5], str(mae_lgbm)[0:5], str(mae_cb)[0:5]],
+#     "RMSE" : [str(rmse_xgb)[0:5], str(rmse_lgbm)[0:5], str(rmse_cb)[0:5]],
+#     "Score" : [str(score_xgb)[0:5], str(score_lgbm)[0:5], str(score_cb)[0:5]]
+# })
+
+# print("Sorted by Score:")
+# print(model_performances.sort_values(by="Score", ascending=False))
+
+# def blend_models_predict(X, b, c, d):
+#     return ((b* xgb.predict(X)) + (c * lgbm.predict(X)) + (d * cb.predict(X)))
+
+# subm = np.exp(blend_models_predict(test, 0.4, 0.3, 0.3))
